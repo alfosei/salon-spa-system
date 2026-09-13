@@ -1,27 +1,28 @@
 const express = require('express');
+const { PrismaClient } = require('./generated/prisma');
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
 
-const services = [
-  { id: 1, name: 'Deep Conditioning', category: 'Hair', price: 250, duration: 60 },
-  { id: 2, name: 'Manicure', category: 'Nails', price: 120, duration: 45 },
-  { id: 3, name: 'Facial', category: 'Skincare', price: 180, duration: 50 },
-];
+
+const prisma = new PrismaClient();
 
 app.get('/', (req, res) => {
   res.send('Salon & Spa backend is running');
 });
 
-app.get('/api/services', (req, res) => {
+app.get('/api/services', async (req, res) => {
+  const services = await prisma.service.findMany();
   res.json(services);
 });
 
-app.get('/api/services/:id', (req, res) => {
+app.get('/api/services/:id', async (req, res) => {
   const requestedId = Number(req.params.id);
-  const service = services.find((s) => s.id === requestedId);
+  const service = await prisma.service.findUnique({
+    where: { id: requestedId },
+  });
 
   if (!service) {
     return res.status(404).json({ message: 'Service not found' });
@@ -30,50 +31,45 @@ app.get('/api/services/:id', (req, res) => {
   res.json(service);
 });
 
-app.post('/api/services', (req, res) => {
+app.post('/api/services', async (req, res) => {
   const { name, category, price, duration } = req.body;
 
-  const newService = {
-    id: services.length + 1,
-    name,
-    category,
-    price,
-    duration,
-  };
+  const newService = await prisma.service.create({
+    data: { name, category, price, duration },
+  });
 
-  services.push(newService);
   res.status(201).json(newService);
 });
 
 
-app.put('/api/services/:id', (req, res) => {
+app.put('/api/services/:id', async (req, res) => {
   const requestedId = Number(req.params.id);
-  const service = services.find((s) => s.id === requestedId);
-
-  if (!service) {
-    return res.status(404).json({ message: 'Service not found' });
-  }
-
   const { name, category, price, duration } = req.body;
 
-  service.name = name;
-  service.category = category;
-  service.price = price;
-  service.duration = duration;
+  try {
+    const updatedService = await prisma.service.update({
+      where: { id: requestedId },
+      data: { name, category, price, duration },
+    });
 
-  res.json(service);
+    res.json(updatedService);
+  } catch (error) {
+    res.status(404).json({ message: 'Service not found' });
+  }
 });
 
-app.delete('/api/services/:id', (req, res) => {
+app.delete('/api/services/:id', async (req, res) => {
   const requestedId = Number(req.params.id);
-  const index = services.findIndex((s) => s.id === requestedId);
 
-  if (index === -1) {
-    return res.status(404).json({ message: 'Service not found' });
+  try {
+    const deletedService = await prisma.service.delete({
+      where: { id: requestedId },
+    });
+
+    res.json(deletedService);
+  } catch (error) {
+    res.status(404).json({ message: 'Service not found' });
   }
-
-  const deleted = services.splice(index, 1);
-  res.json(deleted[0]);
 });
 
 app.listen(PORT, () => {
