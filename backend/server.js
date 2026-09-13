@@ -1,13 +1,62 @@
+require('dotenv').config();
 const express = require('express');
 const { PrismaClient } = require('./generated/prisma');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = 3000;
+const prisma = new PrismaClient();
 
 app.use(express.json());
 
+app.post('/api/auth/register', async (req, res) => {
+  const { email, password, role } = req.body;
 
-const prisma = new PrismaClient();
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        role,
+      },
+    });
+
+    res.status(201).json({
+      id: newUser.id,
+      email: newUser.email,
+      role: newUser.role,
+    });
+  } catch (error) {
+    res.status(400).json({ message: 'Could not create user', error: error.message });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  if (!user) {
+    return res.status(401).json({ message: 'Invalid email or password' });
+  }
+
+  const passwordMatches = await bcrypt.compare(password, user.password);
+
+  if (!passwordMatches) {
+    return res.status(401).json({ message: 'Invalid email or password' });
+  }
+
+  const token = jwt.sign(
+    { userId: user.id, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: '1d' }
+  );
+
+  res.json({ token });
+});
 
 app.get('/', (req, res) => {
   res.send('Salon & Spa backend is running');
@@ -40,7 +89,6 @@ app.post('/api/services', async (req, res) => {
 
   res.status(201).json(newService);
 });
-
 
 app.put('/api/services/:id', async (req, res) => {
   const requestedId = Number(req.params.id);
