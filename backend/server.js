@@ -3,6 +3,7 @@ const express = require('express');
 const { PrismaClient } = require('./generated/prisma');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { authenticate, authorize } = require('./middleware/auth');
 
 const app = express();
 const PORT = 3000;
@@ -80,7 +81,7 @@ app.get('/api/services/:id', async (req, res) => {
   res.json(service);
 });
 
-app.post('/api/services', async (req, res) => {
+app.post('/api/services', authenticate, authorize('ADMIN'), async (req, res) => {
   const { name, category, price, duration } = req.body;
 
   const newService = await prisma.service.create({
@@ -90,7 +91,7 @@ app.post('/api/services', async (req, res) => {
   res.status(201).json(newService);
 });
 
-app.put('/api/services/:id', async (req, res) => {
+app.put('/api/services/:id', authenticate, authorize('ADMIN'), async (req, res) => {
   const requestedId = Number(req.params.id);
   const { name, category, price, duration } = req.body;
 
@@ -106,7 +107,7 @@ app.put('/api/services/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/services/:id', async (req, res) => {
+app.delete('/api/services/:id', authenticate, authorize('ADMIN'), async (req, res) => {
   const requestedId = Number(req.params.id);
 
   try {
