@@ -36,6 +36,7 @@ model User {
   role      Role
   createdAt DateTime @default(now())
   client    Client?
+  staff     Staff?
 }
 
 model Client {
@@ -45,4 +46,14 @@ model Client {
   fullName  String
   phone     String?
   createdAt DateTime @default(now())
+}
+
+model Staff {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @unique
+  user       User     @relation(fields: [userId], references: [id])
+  fullName   String
+  position   String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
 }

@@ -183,6 +183,68 @@ app.delete('/api/clients/:id', authenticate, authorize('ADMIN'), async (req, res
   }
 });
 
+app.get('/api/staff', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
+  const staff = await prisma.staff.findMany({
+    include: { user: { select: { email: true } } },
+  });
+  res.json(staff);
+});
+
+app.get('/api/staff/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
+  const requestedId = Number(req.params.id);
+  const staffMember = await prisma.staff.findUnique({
+    where: { id: requestedId },
+    include: { user: { select: { email: true } } },
+  });
+
+  if (!staffMember) {
+    return res.status(404).json({ message: 'Staff member not found' });
+  }
+
+  res.json(staffMember);
+});
+
+app.post('/api/staff', authenticate, authorize('ADMIN'), async (req, res) => {
+  const { userId, fullName, position } = req.body;
+
+  try {
+    const newStaff = await prisma.staff.create({
+      data: { userId, fullName, position },
+    });
+    res.status(201).json(newStaff);
+  } catch (error) {
+    res.status(400).json({ message: 'Could not create staff member', error: error.message });
+  }
+});
+
+app.put('/api/staff/:id', authenticate, authorize('ADMIN'), async (req, res) => {
+  const requestedId = Number(req.params.id);
+  const { fullName, position, isActive } = req.body;
+
+  try {
+    const updatedStaff = await prisma.staff.update({
+      where: { id: requestedId },
+      data: { fullName, position, isActive },
+    });
+    res.json(updatedStaff);
+  } catch (error) {
+    res.status(404).json({ message: 'Staff member not found' });
+  }
+});
+
+app.delete('/api/staff/:id', authenticate, authorize('ADMIN'), async (req, res) => {
+  const requestedId = Number(req.params.id);
+
+  try {
+    const deletedStaff = await prisma.staff.delete({
+      where: { id: requestedId },
+    });
+    res.json(deletedStaff);
+  } catch (error) {
+    res.status(404).json({ message: 'Staff member not found' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
