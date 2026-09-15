@@ -35,4 +35,14 @@ model User {
   password  String
   role      Role
   createdAt DateTime @default(now())
+  client    Client?
+}
+
+model Client {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  user      User     @relation(fields: [userId], references: [id])
+  fullName  String
+  phone     String?
+  createdAt DateTime @default(now())
 }

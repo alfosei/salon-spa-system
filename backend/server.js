@@ -121,6 +121,68 @@ app.delete('/api/services/:id', authenticate, authorize('ADMIN'), async (req, re
   }
 });
 
+app.get('/api/clients', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
+  const clients = await prisma.client.findMany({
+    include: { user: { select: { email: true } } },
+  });
+  res.json(clients);
+});
+
+app.get('/api/clients/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
+  const requestedId = Number(req.params.id);
+  const client = await prisma.client.findUnique({
+    where: { id: requestedId },
+    include: { user: { select: { email: true } } },
+  });
+
+  if (!client) {
+    return res.status(404).json({ message: 'Client not found' });
+  }
+
+  res.json(client);
+});
+
+app.post('/api/clients', authenticate, authorize('ADMIN'), async (req, res) => {
+  const { userId, fullName, phone } = req.body;
+
+  try {
+    const newClient = await prisma.client.create({
+      data: { userId, fullName, phone },
+    });
+    res.status(201).json(newClient);
+  } catch (error) {
+    res.status(400).json({ message: 'Could not create client', error: error.message });
+  }
+});
+
+app.put('/api/clients/:id', authenticate, authorize('ADMIN'), async (req, res) => {
+  const requestedId = Number(req.params.id);
+  const { fullName, phone } = req.body;
+
+  try {
+    const updatedClient = await prisma.client.update({
+      where: { id: requestedId },
+      data: { fullName, phone },
+    });
+    res.json(updatedClient);
+  } catch (error) {
+    res.status(404).json({ message: 'Client not found' });
+  }
+});
+
+app.delete('/api/clients/:id', authenticate, authorize('ADMIN'), async (req, res) => {
+  const requestedId = Number(req.params.id);
+
+  try {
+    const deletedClient = await prisma.client.delete({
+      where: { id: requestedId },
+    });
+    res.json(deletedClient);
+  } catch (error) {
+    res.status(404).json({ message: 'Client not found' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
