@@ -15,12 +15,13 @@ datasource db {
 }
 
 model Service {
-  id        Int      @id @default(autoincrement())
-  name      String
-  category  String
-  price     Float
-  duration  Int
-  createdAt DateTime @default(now())
+  id           Int           @id @default(autoincrement())
+  name         String
+  category     String
+  price        Float
+  duration     Int
+  createdAt    DateTime      @default(now())
+  appointments Appointment[]
 }
 
 enum Role {
@@ -40,20 +41,42 @@ model User {
 }
 
 model Client {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @unique
-  user      User     @relation(fields: [userId], references: [id])
-  fullName  String
-  phone     String?
-  createdAt DateTime @default(now())
+  id           Int           @id @default(autoincrement())
+  userId       Int           @unique
+  user         User          @relation(fields: [userId], references: [id])
+  fullName     String
+  phone        String?
+  createdAt    DateTime      @default(now())
+  appointments Appointment[]
 }
 
 model Staff {
-  id         Int      @id @default(autoincrement())
-  userId     Int      @unique
-  user       User     @relation(fields: [userId], references: [id])
-  fullName   String
-  position   String
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
+  id           Int           @id @default(autoincrement())
+  userId       Int           @unique
+  user         User          @relation(fields: [userId], references: [id])
+  fullName     String
+  position     String
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  appointments Appointment[]
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+model Appointment {
+  id          Int               @id @default(autoincrement())
+  clientId    Int
+  client      Client            @relation(fields: [clientId], references: [id])
+  staffId     Int
+  staff       Staff             @relation(fields: [staffId], references: [id])
+  serviceId   Int
+  service     Service           @relation(fields: [serviceId], references: [id])
+  dateTime    DateTime
+  status      AppointmentStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
 }

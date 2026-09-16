@@ -245,6 +245,85 @@ app.delete('/api/staff/:id', authenticate, authorize('ADMIN'), async (req, res) 
   }
 });
 
+app.get('/api/appointments', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
+  const appointments = await prisma.appointment.findMany({
+    include: {
+      client: { select: { fullName: true } },
+      staff: { select: { fullName: true } },
+      service: { select: { name: true, price: true, duration: true } },
+    },
+  });
+  res.json(appointments);
+});
+
+app.get('/api/appointments/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
+  const requestedId = Number(req.params.id);
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: requestedId },
+    include: {
+      client: { select: { fullName: true } },
+      staff: { select: { fullName: true } },
+      service: { select: { name: true, price: true, duration: true } },
+    },
+  });
+
+  if (!appointment) {
+    return res.status(404).json({ message: 'Appointment not found' });
+  }
+
+  res.json(appointment);
+});
+
+app.post('/api/appointments', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
+  const { clientId, staffId, serviceId, dateTime } = req.body;
+
+  try {
+    const newAppointment = await prisma.appointment.create({
+      data: {
+        clientId,
+        staffId,
+        serviceId,
+        dateTime: new Date(dateTime),
+      },
+    });
+    res.status(201).json(newAppointment);
+  } catch (error) {
+    res.status(400).json({ message: 'Could not create appointment', error: error.message });
+  }
+});
+
+app.put('/api/appointments/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
+  const requestedId = Number(req.params.id);
+  const { staffId, dateTime, status } = req.body;
+
+  try {
+    const updatedAppointment = await prisma.appointment.update({
+      where: { id: requestedId },
+      data: {
+        staffId,
+        dateTime: dateTime ? new Date(dateTime) : undefined,
+        status,
+      },
+    });
+    res.json(updatedAppointment);
+  } catch (error) {
+    res.status(404).json({ message: 'Appointment not found' });
+  }
+});
+
+app.delete('/api/appointments/:id', authenticate, authorize('ADMIN'), async (req, res) => {
+  const requestedId = Number(req.params.id);
+
+  try {
+    const deletedAppointment = await prisma.appointment.delete({
+      where: { id: requestedId },
+    });
+    res.json(deletedAppointment);
+  } catch (error) {
+    res.status(404).json({ message: 'Appointment not found' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
