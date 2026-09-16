@@ -324,6 +324,69 @@ app.delete('/api/appointments/:id', authenticate, authorize('ADMIN'), async (req
   }
 });
 
+app.post('/api/appointments/:id/pay', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
+  const appointmentId = Number(req.params.id);
+  const { amount } = req.body;
+
+  try {
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId },
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ message: 'Appointment not found' });
+    }
+
+    const updatedAppointment = await prisma.appointment.update({
+      where: { id: appointmentId },
+      data: { status: 'COMPLETED' },
+    });
+
+    const payment = await prisma.payment.create({
+      data: { appointmentId, amount },
+    });
+
+    res.status(201).json({ appointment: updatedAppointment, payment });
+  } catch (error) {
+    res.status(400).json({ message: 'Could not process payment', error: error.message });
+  }
+});
+
+app.get('/api/clients/:id/spending', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
+  const clientId = Number(req.params.id);
+
+  const result = await prisma.payment.aggregate({
+    where: { appointment: { clientId } },
+    _sum: { amount: true },
+    _count: true,
+  });
+
+  res.json({
+    totalSpent: result._sum.amount || 0,
+    totalSessions: result._count,
+  });
+});
+
+app.get('/api/reports/daily-revenue', authenticate, authorize('ADMIN'), async (req, res) => {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const result = await prisma.payment.aggregate({
+    where: { paidAt: { gte: startOfDay, lte: endOfDay } },
+    _sum: { amount: true },
+    _count: true,
+  });
+
+  res.json({
+    date: startOfDay.toISOString().split('T')[0],
+    totalRevenue: result._sum.amount || 0,
+    totalPayments: result._count,
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
