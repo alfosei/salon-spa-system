@@ -59,6 +59,7 @@ model Staff {
   isActive     Boolean       @default(true)
   createdAt    DateTime      @default(now())
   appointments Appointment[]
+  attendance   Attendance[]
 }
 
 enum AppointmentStatus {
@@ -88,4 +89,12 @@ model Payment {
   appointment   Appointment @relation(fields: [appointmentId], references: [id])
   amount        Float
   paidAt        DateTime    @default(now())
+}
+
+model Attendance {
+  id       Int       @id @default(autoincrement())
+  staffId  Int
+  staff    Staff     @relation(fields: [staffId], references: [id])
+  clockIn  DateTime  @default(now())
+  clockOut DateTime?
 }

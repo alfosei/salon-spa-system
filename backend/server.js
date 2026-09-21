@@ -387,6 +387,43 @@ app.get('/api/reports/daily-revenue', authenticate, authorize('ADMIN'), async (r
   });
 });
 
+app.post('/api/attendance/clock-in', authenticate, authorize('STAFF'), async (req, res) => {
+  const staffMember = await prisma.staff.findUnique({
+    where: { userId: req.user.userId },
+  });
+
+  if (!staffMember) {
+    return res.status(404).json({ message: 'Staff profile not found for this user' });
+  }
+
+  const attendance = await prisma.attendance.create({
+    data: { staffId: staffMember.id },
+  });
+
+  res.status(201).json(attendance);
+});
+
+app.put('/api/attendance/:id/clock-out', authenticate, authorize('STAFF'), async (req, res) => {
+  const attendanceId = Number(req.params.id);
+
+  try {
+    const updatedAttendance = await prisma.attendance.update({
+      where: { id: attendanceId },
+      data: { clockOut: new Date() },
+    });
+    res.json(updatedAttendance);
+  } catch (error) {
+    res.status(404).json({ message: 'Attendance record not found' });
+  }
+});
+
+app.get('/api/attendance', authenticate, authorize('ADMIN'), async (req, res) => {
+  const attendance = await prisma.attendance.findMany({
+    include: { staff: { select: { fullName: true } } },
+  });
+  res.json(attendance);
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
