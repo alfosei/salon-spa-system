@@ -424,6 +424,61 @@ app.get('/api/attendance', authenticate, authorize('ADMIN'), async (req, res) =>
   res.json(attendance);
 });
 
+app.get('/api/dashboard', authenticate, authorize('ADMIN'), async (req, res) => {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const [
+    todayRevenue,
+    totalAppointmentsToday,
+    completedToday,
+    pendingCount,
+    cancelledCount,
+    totalClients,
+    newClientsToday,
+    staffClockedInToday,
+  ] = await Promise.all([
+    prisma.payment.aggregate({
+      where: { paidAt: { gte: startOfDay, lte: endOfDay } },
+      _sum: { amount: true },
+    }),
+    prisma.appointment.count({
+      where: { dateTime: { gte: startOfDay, lte: endOfDay } },
+    }),
+    prisma.appointment.count({
+      where: { status: 'COMPLETED', dateTime: { gte: startOfDay, lte: endOfDay } },
+    }),
+    prisma.appointment.count({
+      where: { status: 'PENDING' },
+    }),
+    prisma.appointment.count({
+      where: { status: 'CANCELLED' },
+    }),
+    prisma.client.count(),
+    prisma.client.count({
+      where: { createdAt: { gte: startOfDay, lte: endOfDay } },
+    }),
+    prisma.attendance.count({
+      where: { clockIn: { gte: startOfDay, lte: endOfDay } },
+    }),
+  ]);
+
+  res.json({
+    date: startOfDay.toISOString().split('T')[0],
+    todayRevenue: todayRevenue._sum.amount || 0,
+    appointmentsToday: totalAppointmentsToday,
+    completedToday,
+    pendingAppointments: pendingCount,
+    cancelledAppointments: cancelledCount,
+    totalClients,
+    newClientsToday,
+    staffClockedInToday,
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
