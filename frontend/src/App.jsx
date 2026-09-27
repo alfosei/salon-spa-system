@@ -4,7 +4,12 @@ import Dashboard from './Dashboard';
 import Services from './Services';
 
 function App() {
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(!!localStorage.getItem('token'));
+
+  function handleLogout() {
+    localStorage.removeItem('token');
+    setLoggedIn(false);
+  }
 
   if (!loggedIn) {
     return <Login onLoginSuccess={() => setLoggedIn(true)} />;
@@ -13,6 +18,7 @@ function App() {
   return (
     <div>
       <h1>Salon & Spa</h1>
+      <button onClick={handleLogout}>Log Out</button>
       <Dashboard />
       <Services />
     </div>
