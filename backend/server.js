@@ -4,12 +4,14 @@ const { PrismaClient } = require('./generated/prisma');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { authenticate, authorize } = require('./middleware/auth');
+const cors = require('cors');
 
 const app = express();
 const PORT = 3000;
 const prisma = new PrismaClient();
 
 app.use(express.json());
+app.use(cors());
 
 app.post('/api/auth/register', async (req, res) => {
   const { email, password, role } = req.body;
