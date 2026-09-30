@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import Login from './Login';
 import Dashboard from './Dashboard';
-import Services from './Services';
 import Appointments from './Appointments';
+import Services from './Services';
+import ClientPortal from './ClientPortal';
+import { getUserRole } from './api';
 
 function App() {
   const [loggedIn, setLoggedIn] = useState(!!localStorage.getItem('token'));
@@ -16,13 +18,22 @@ function App() {
     return <Login onLoginSuccess={() => setLoggedIn(true)} />;
   }
 
+  const role = getUserRole();
+
   return (
     <div>
       <h1>Salon & Spa</h1>
       <button onClick={handleLogout}>Log Out</button>
-      <Dashboard />
-      <Appointments />
-      <Services />
+
+      {role === 'CLIENT' ? (
+        <ClientPortal />
+      ) : (
+        <>
+          <Dashboard />
+          <Appointments />
+          <Services />
+        </>
+      )}
     </div>
   );
 }

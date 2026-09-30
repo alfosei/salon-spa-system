@@ -354,6 +354,74 @@ app.post('/api/appointments/:id/pay', authenticate, authorize('ADMIN', 'STAFF'),
   }
 });
 
+app.post('/api/appointments/my', authenticate, authorize('CLIENT'), async (req, res) => {
+  const { staffId, serviceId, dateTime } = req.body;
+
+  try {
+    const client = await prisma.client.findUnique({
+      where: { userId: req.user.userId },
+    });
+
+    if (!client) {
+      return res.status(404).json({ message: 'Client profile not found for this user' });
+    }
+
+    const newAppointment = await prisma.appointment.create({
+      data: {
+        clientId: client.id,
+        staffId,
+        serviceId,
+        dateTime: new Date(dateTime),
+      },
+    });
+
+    res.status(201).json(newAppointment);
+  } catch (error) {
+    res.status(400).json({ message: 'Could not create appointment', error: error.message });
+  }
+});
+
+app.get('/api/appointments/my', authenticate, authorize('CLIENT'), async (req, res) => {
+  const client = await prisma.client.findUnique({
+    where: { userId: req.user.userId },
+  });
+
+  if (!client) {
+    return res.status(404).json({ message: 'Client profile not found for this user' });
+  }
+
+  const appointments = await prisma.appointment.findMany({
+    where: { clientId: client.id },
+    include: {
+      staff: { select: { fullName: true } },
+      service: { select: { name: true, price: true, duration: true } },
+    },
+  });
+
+  res.json(appointments);
+});
+
+app.get('/api/clients/me/spending', authenticate, authorize('CLIENT'), async (req, res) => {
+  const client = await prisma.client.findUnique({
+    where: { userId: req.user.userId },
+  });
+
+  if (!client) {
+    return res.status(404).json({ message: 'Client profile not found for this user' });
+  }
+
+  const result = await prisma.payment.aggregate({
+    where: { appointment: { clientId: client.id } },
+    _sum: { amount: true },
+    _count: true,
+  });
+
+  res.json({
+    totalSpent: result._sum.amount || 0,
+    totalSessions: result._count,
+  });
+});
+
 app.get('/api/clients/:id/spending', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
   const clientId = Number(req.params.id);
 

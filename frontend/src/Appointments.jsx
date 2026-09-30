@@ -1,20 +1,26 @@
 import { useState, useEffect } from 'react';
 import { apiRequest } from './api';
+import BookingForm from './BookingForm';
 
 function Appointments() {
   const [appointments, setAppointments] = useState([]);
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  function loadAppointments() {
     apiRequest('/api/appointments')
       .then((data) => setAppointments(data))
       .catch((err) => setError(err.message));
+  }
+
+  useEffect(() => {
+    loadAppointments();
   }, []);
 
   if (error) return <p style={{ color: 'red' }}>{error}</p>;
 
   return (
     <div>
+      <BookingForm onBookingCreated={loadAppointments} />
       <h2>Appointments</h2>
       <ul>
         {appointments.map((a) => (
