@@ -1,111 +1,323 @@
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  --color-bg: #1B1420;
+  --color-surface: #241B29;
+  --color-border: #3A2E42;
+  --color-text: #F2E9E4;
+  --color-text-muted: #B8A8B4;
+  --color-accent: #C9A24B;
+  --color-accent-hover: #DDB766;
+  --color-error: #E08A78;
+  --color-success: #9CB38A;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Figtree', -apple-system, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  background:
+    radial-gradient(ellipse 1200px 600px at 50% -10%, rgba(201, 162, 75, 0.08), transparent 60%),
+    var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.6;
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  margin: 0 0 0.75rem;
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.3rem; margin-top: 0; }
+h3 { font-size: 1.1rem; margin-top: 1.5rem; }
+h4 { font-size: 0.95rem; margin-top: 1.25rem; color: var(--color-text-muted); }
+
+p {
+  max-width: 65ch;
+}
+
+a {
+  color: var(--color-accent);
+}
+
+.error-text { color: var(--color-error); }
+.success-text { color: var(--color-success); }
+.muted-text { color: var(--color-text-muted); }
+
+/* ---------- Header & brand ---------- */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 1.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.brand-mark h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  letter-spacing: 0.03em;
+}
+
+.brand-mark p {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+.role-badge {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  margin-right: 0.75rem;
+}
+
+/* ---------- Auth screen ---------- */
+
+.auth-shell {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 2rem 1.25rem;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+.auth-shell .brand-mark {
+  text-align: center;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
+.auth-shell form {
+  width: 100%;
+  max-width: 360px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1.75rem;
   margin: 0;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+/* ---------- Content shells ---------- */
+
+.app-content {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem 1.75rem 4rem;
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+.narrow-content {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+/* ---------- Dashboard grid ---------- */
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  grid-template-areas:
+    "stats stats"
+    "appointments clients"
+    "staff services";
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.panel-stats { grid-area: stats; }
+.panel-appointments { grid-area: appointments; }
+.panel-clients { grid-area: clients; }
+.panel-staff { grid-area: staff; }
+.panel-services { grid-area: services; }
+
+@media (max-width: 900px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "stats"
+      "appointments"
+      "clients"
+      "staff"
+      "services";
+  }
+}
+
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--color-accent);
+  border-radius: 8px;
+  padding: 1.25rem 1.25rem 1.5rem;
+}
+
+.panel:not(.panel-stats) {
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.panel::-webkit-scrollbar { width: 8px; }
+.panel::-webkit-scrollbar-track { background: transparent; }
+.panel::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
+.panel::-webkit-scrollbar-thumb:hover { background: var(--color-accent); }
+
+/* ---------- Stat cards ---------- */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.stat-card {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  line-height: 1.1;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-top: 0.3rem;
+}
+
+/* ---------- Forms ---------- */
+
+form {
+  margin: 1rem 0 2rem;
+}
+
+label {
+  display: block;
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.3rem;
+}
+
+input:not([type="radio"]):not([type="checkbox"]),
+select,
+textarea {
+  display: block;
+  width: 100%;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 4px;
+  margin-bottom: 0.9rem;
+}
+
+textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+input[type="radio"],
+input[type="checkbox"] {
+  width: auto;
+  margin-right: 0.4rem;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+  border-color: var(--color-accent);
+}
+
+::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.7;
+}
+
+/* ---------- Buttons ---------- */
+
+button {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.95rem;
+  background: var(--color-accent);
+  color: #241A14;
+  border: none;
+  padding: 0.6rem 1.1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  margin: 0 0.4rem 0.4rem 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button {
+    transition: background-color 150ms ease;
+  }
+}
+
+button:hover {
+  background: var(--color-accent-hover);
+}
+
+button[type="button"] {
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+button[type="button"]:hover {
+  background: var(--color-bg);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---------- Lists ---------- */
+
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.5rem;
+}
+
+li {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  padding: 0.85rem 1rem;
+  border-radius: 4px;
+  margin-bottom: 0.6rem;
 }

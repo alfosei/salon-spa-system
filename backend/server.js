@@ -69,50 +69,51 @@ app.get('/', (req, res) => {
   res.send('Salon & Spa backend is running');
 });
 
-app.post('/api/advisor', authenticate, async (req, res) => {
-  const { message } = req.body;
+// ---------- ACCOUNT (self-service, any logged-in role) ----------
+
+app.put('/api/users/me/email', authenticate, async (req, res) => {
+  const { newEmail, currentPassword } = req.body;
 
   try {
-    const services = await prisma.service.findMany();
+    const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
 
-    if (!anthropic) {
-      // Mock mode: no API key configured. Pick a simple keyword-based
-      // match so testing still feels grounded in real services,
-      // without calling any external API.
-      const lowerMessage = message.toLowerCase();
-      const matched =
-        services.find((s) => lowerMessage.includes(s.category.toLowerCase())) ||
-        services[0];
-
-      return res.json({
-        reply: `[Mock advisor — no API key configured] Based on what you described, I'd suggest ${matched.name} (GH₵${matched.price}, ${matched.duration} min). This is a placeholder response for testing — connect a real ANTHROPIC_API_KEY to get genuine AI recommendations.`,
-      });
+    const matches = await bcrypt.compare(currentPassword, user.password);
+    if (!matches) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
     }
 
-    const servicesList = services
-      .map((s) => `- ${s.name} (${s.category}): GH₵${s.price}, ${s.duration} min`)
-      .join('\n');
-
-    const systemPrompt = `You are a beauty and wellness advisor for a salon and spa. You must ONLY recommend services from this exact list — never invent a service that isn't listed:
-
-${servicesList}
-
-Rules:
-- Recommend exactly one service that best fits the client's goal, and briefly explain why.
-- If nothing in the list fits well, say so honestly rather than forcing a match.
-- Do not diagnose medical conditions. If the client's message suggests a medical issue, gently suggest they see a doctor instead, and do not recommend a service for it.
-- Keep your response short — 2 to 4 sentences.`;
-
-    const aiResponse = await anthropic.messages.create({
-      model: 'claude-sonnet-5',
-      max_tokens: 300,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: message }],
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.userId },
+      data: { email: newEmail },
     });
 
-    res.json({ reply: aiResponse.content[0].text });
+    res.json({ id: updatedUser.id, email: updatedUser.email, role: updatedUser.role });
   } catch (error) {
-    res.status(500).json({ message: 'Advisor request failed', error: error.message });
+    res.status(400).json({ message: 'Could not update email', error: error.message });
+  }
+});
+
+app.put('/api/users/me/password', authenticate, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
+
+    const matches = await bcrypt.compare(currentPassword, user.password);
+    if (!matches) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id: req.user.userId },
+      data: { password: hashedPassword },
+    });
+
+    res.json({ message: 'Password updated' });
+  } catch (error) {
+    res.status(400).json({ message: 'Could not update password', error: error.message });
   }
 });
 
@@ -177,8 +178,42 @@ app.delete('/api/services/:id', authenticate, authorize('ADMIN'), async (req, re
 });
 
 // ---------- CLIENTS ----------
-// IMPORTANT: specific literal paths (/me/spending) must come BEFORE
+// IMPORTANT: literal paths (/me, /me/spending) must come BEFORE
 // wildcard paths (/:id, /:id/spending), or the wildcard swallows them.
+
+app.get('/api/clients/me', authenticate, authorize('CLIENT'), async (req, res) => {
+  const client = await prisma.client.findUnique({
+    where: { userId: req.user.userId },
+    include: { user: { select: { email: true } } },
+  });
+
+  if (!client) {
+    return res.status(404).json({ message: 'Client profile not found for this user' });
+  }
+
+  res.json(client);
+});
+
+app.put('/api/clients/me', authenticate, authorize('CLIENT'), async (req, res) => {
+  const { fullName, phone } = req.body;
+
+  try {
+    const client = await prisma.client.findUnique({ where: { userId: req.user.userId } });
+
+    if (!client) {
+      return res.status(404).json({ message: 'Client profile not found for this user' });
+    }
+
+    const updatedClient = await prisma.client.update({
+      where: { id: client.id },
+      data: { fullName, phone },
+    });
+
+    res.json(updatedClient);
+  } catch (error) {
+    res.status(400).json({ message: 'Could not update profile', error: error.message });
+  }
+});
 
 app.get('/api/clients/me/spending', authenticate, authorize('CLIENT'), async (req, res) => {
   const client = await prisma.client.findUnique({
@@ -279,6 +314,7 @@ app.get('/api/clients/:id/spending', authenticate, authorize('ADMIN', 'STAFF'), 
 });
 
 // ---------- STAFF ----------
+// Same rule: literal paths (/directory, /me) before the wildcard (/:id).
 
 app.get('/api/staff/directory', authenticate, async (req, res) => {
   const staff = await prisma.staff.findMany({
@@ -286,6 +322,40 @@ app.get('/api/staff/directory', authenticate, async (req, res) => {
     select: { id: true, fullName: true, position: true },
   });
   res.json(staff);
+});
+
+app.get('/api/staff/me', authenticate, authorize('STAFF'), async (req, res) => {
+  const staffMember = await prisma.staff.findUnique({
+    where: { userId: req.user.userId },
+    include: { user: { select: { email: true } } },
+  });
+
+  if (!staffMember) {
+    return res.status(404).json({ message: 'Staff profile not found for this user' });
+  }
+
+  res.json(staffMember);
+});
+
+app.put('/api/staff/me', authenticate, authorize('STAFF'), async (req, res) => {
+  const { fullName } = req.body;
+
+  try {
+    const staffMember = await prisma.staff.findUnique({ where: { userId: req.user.userId } });
+
+    if (!staffMember) {
+      return res.status(404).json({ message: 'Staff profile not found for this user' });
+    }
+
+    const updated = await prisma.staff.update({
+      where: { id: staffMember.id },
+      data: { fullName },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ message: 'Could not update profile', error: error.message });
+  }
 });
 
 app.get('/api/staff', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
@@ -351,8 +421,6 @@ app.delete('/api/staff/:id', authenticate, authorize('ADMIN'), async (req, res) 
 });
 
 // ---------- APPOINTMENTS ----------
-// IMPORTANT: specific literal paths (/staff/my, /my) must come BEFORE
-// the wildcard path (/:id), or the wildcard swallows them.
 
 app.get('/api/appointments', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
   const appointments = await prisma.appointment.findMany({
@@ -604,6 +672,52 @@ app.get('/api/attendance', authenticate, authorize('ADMIN'), async (req, res) =>
     include: { staff: { select: { fullName: true } } },
   });
   res.json(attendance);
+});
+
+// ---------- ADVISOR ----------
+
+app.post('/api/advisor', authenticate, async (req, res) => {
+  const { message } = req.body;
+
+  try {
+    const services = await prisma.service.findMany();
+
+    if (!anthropic) {
+      const lowerMessage = message.toLowerCase();
+      const matched =
+        services.find((s) => lowerMessage.includes(s.category.toLowerCase())) ||
+        services[0];
+
+      return res.json({
+        reply: `[Mock advisor — no API key configured] Based on what you described, I'd suggest ${matched.name} (GH₵${matched.price}, ${matched.duration} min). This is a placeholder response for testing — connect a real ANTHROPIC_API_KEY to get genuine AI recommendations.`,
+      });
+    }
+
+    const servicesList = services
+      .map((s) => `- ${s.name} (${s.category}): GH₵${s.price}, ${s.duration} min`)
+      .join('\n');
+
+    const systemPrompt = `You are a beauty and wellness advisor for a salon and spa. You must ONLY recommend services from this exact list — never invent a service that isn't listed:
+
+${servicesList}
+
+Rules:
+- Recommend exactly one service that best fits the client's goal, and briefly explain why.
+- If nothing in the list fits well, say so honestly rather than forcing a match.
+- Do not diagnose medical conditions. If the client's message suggests a medical issue, gently suggest they see a doctor instead, and do not recommend a service for it.
+- Keep your response short — 2 to 4 sentences.`;
+
+    const aiResponse = await anthropic.messages.create({
+      model: 'claude-sonnet-5',
+      max_tokens: 300,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: message }],
+    });
+
+    res.json({ reply: aiResponse.content[0].text });
+  } catch (error) {
+    res.status(500).json({ message: 'Advisor request failed', error: error.message });
+  }
 });
 
 // ---------- DASHBOARD ----------

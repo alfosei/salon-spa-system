@@ -7,10 +7,16 @@ import Clients from './Clients';
 import StaffManagement from './StaffManagement';
 import ClientPortal from './ClientPortal';
 import StaffPortal from './StaffPortal';
+import Settings from './Settings';
 import { getUserRole } from './api';
+
+function formatRole(role) {
+  return role.charAt(0) + role.slice(1).toLowerCase();
+}
 
 function App() {
   const [loggedIn, setLoggedIn] = useState(!!localStorage.getItem('token'));
+  const [showSettings, setShowSettings] = useState(false);
 
   function handleLogout() {
     localStorage.removeItem('token');
@@ -18,27 +24,72 @@ function App() {
   }
 
   if (!loggedIn) {
-    return <Login onLoginSuccess={() => setLoggedIn(true)} />;
+    return (
+      <div className="auth-shell">
+        <div className="brand-mark">
+          <h1>OZEL</h1>
+          <p className="muted-text">Salon &amp; Spa</p>
+        </div>
+        <Login onLoginSuccess={() => setLoggedIn(true)} />
+      </div>
+    );
   }
 
   const role = getUserRole();
 
   return (
     <div>
-      <h1>Salon & Spa</h1>
-      <button onClick={handleLogout}>Log Out</button>
+      <div className="app-header">
+        <div className="brand-mark">
+          <h1>OZEL</h1>
+          <p className="muted-text">Salon &amp; Spa</p>
+        </div>
+        <div className="header-right">
+          <span className="role-badge">{formatRole(role)}</span>
+          <button type="button" onClick={() => setShowSettings(!showSettings)}>
+            {showSettings ? '← Back' : 'Settings'}
+          </button>
+          <button type="button" onClick={handleLogout}>Log Out</button>
+        </div>
+      </div>
 
-      {role === 'CLIENT' && <ClientPortal />}
-      {role === 'STAFF' && <StaffPortal />}
-      {role === 'ADMIN' && (
-        <>
-          <Dashboard />
-          <Appointments />
-          <Clients />
-          <StaffManagement />
-          <Services />
-        </>
-      )}
+      <div className="app-content">
+        {showSettings ? (
+          <div className="narrow-content">
+            <Settings />
+          </div>
+        ) : (
+          <>
+            {role === 'CLIENT' && (
+              <div className="narrow-content">
+                <ClientPortal />
+              </div>
+            )}
+            {role === 'STAFF' && (
+              <div className="narrow-content">
+                <StaffPortal />
+              </div>
+            )}
+            {role === 'ADMIN' && (
+              <div className="dashboard-grid">
+                <Dashboard />
+                <div className="panel panel-appointments">
+                  <Appointments />
+                </div>
+                <div className="panel panel-clients">
+                  <Clients />
+                </div>
+                <div className="panel panel-staff">
+                  <StaffManagement />
+                </div>
+                <div className="panel panel-services">
+                  <Services />
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
