@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiRequest } from './api';
+import Advisor from './Advisor';
 
 function ClientPortal() {
   const [appointments, setAppointments] = useState([]);
@@ -84,7 +85,7 @@ function ClientPortal() {
         />
         <button type="submit">Book</button>
       </form>
-
+      <Advisor />
       <h3>My Appointments</h3>
       <ul>
         {appointments.map((a) => (

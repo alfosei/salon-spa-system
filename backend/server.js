@@ -5,10 +5,14 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { authenticate, authorize } = require('./middleware/auth');
 const cors = require('cors');
+const Anthropic = require('@anthropic-ai/sdk');
 
 const app = express();
 const PORT = 3000;
 const prisma = new PrismaClient();
+const anthropic = process.env.ANTHROPIC_API_KEY
+  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  : null;
 
 app.use(express.json());
 app.use(cors());
@@ -63,6 +67,53 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/', (req, res) => {
   res.send('Salon & Spa backend is running');
+});
+
+app.post('/api/advisor', authenticate, async (req, res) => {
+  const { message } = req.body;
+
+  try {
+    const services = await prisma.service.findMany();
+
+    if (!anthropic) {
+      // Mock mode: no API key configured. Pick a simple keyword-based
+      // match so testing still feels grounded in real services,
+      // without calling any external API.
+      const lowerMessage = message.toLowerCase();
+      const matched =
+        services.find((s) => lowerMessage.includes(s.category.toLowerCase())) ||
+        services[0];
+
+      return res.json({
+        reply: `[Mock advisor — no API key configured] Based on what you described, I'd suggest ${matched.name} (GH₵${matched.price}, ${matched.duration} min). This is a placeholder response for testing — connect a real ANTHROPIC_API_KEY to get genuine AI recommendations.`,
+      });
+    }
+
+    const servicesList = services
+      .map((s) => `- ${s.name} (${s.category}): GH₵${s.price}, ${s.duration} min`)
+      .join('\n');
+
+    const systemPrompt = `You are a beauty and wellness advisor for a salon and spa. You must ONLY recommend services from this exact list — never invent a service that isn't listed:
+
+${servicesList}
+
+Rules:
+- Recommend exactly one service that best fits the client's goal, and briefly explain why.
+- If nothing in the list fits well, say so honestly rather than forcing a match.
+- Do not diagnose medical conditions. If the client's message suggests a medical issue, gently suggest they see a doctor instead, and do not recommend a service for it.
+- Keep your response short — 2 to 4 sentences.`;
+
+    const aiResponse = await anthropic.messages.create({
+      model: 'claude-sonnet-5',
+      max_tokens: 300,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: message }],
+    });
+
+    res.json({ reply: aiResponse.content[0].text });
+  } catch (error) {
+    res.status(500).json({ message: 'Advisor request failed', error: error.message });
+  }
 });
 
 // ---------- SERVICES ----------
