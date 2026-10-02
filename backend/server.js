@@ -65,6 +65,8 @@ app.get('/', (req, res) => {
   res.send('Salon & Spa backend is running');
 });
 
+// ---------- SERVICES ----------
+
 app.get('/api/services', async (req, res) => {
   const services = await prisma.service.findMany();
   res.json(services);
@@ -121,6 +123,31 @@ app.delete('/api/services/:id', authenticate, authorize('ADMIN'), async (req, re
   } catch (error) {
     res.status(404).json({ message: 'Service not found' });
   }
+});
+
+// ---------- CLIENTS ----------
+// IMPORTANT: specific literal paths (/me/spending) must come BEFORE
+// wildcard paths (/:id, /:id/spending), or the wildcard swallows them.
+
+app.get('/api/clients/me/spending', authenticate, authorize('CLIENT'), async (req, res) => {
+  const client = await prisma.client.findUnique({
+    where: { userId: req.user.userId },
+  });
+
+  if (!client) {
+    return res.status(404).json({ message: 'Client profile not found for this user' });
+  }
+
+  const result = await prisma.payment.aggregate({
+    where: { appointment: { clientId: client.id } },
+    _sum: { amount: true },
+    _count: true,
+  });
+
+  res.json({
+    totalSpent: result._sum.amount || 0,
+    totalSessions: result._count,
+  });
 });
 
 app.get('/api/clients', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
@@ -185,6 +212,31 @@ app.delete('/api/clients/:id', authenticate, authorize('ADMIN'), async (req, res
   }
 });
 
+app.get('/api/clients/:id/spending', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
+  const clientId = Number(req.params.id);
+
+  const result = await prisma.payment.aggregate({
+    where: { appointment: { clientId } },
+    _sum: { amount: true },
+    _count: true,
+  });
+
+  res.json({
+    totalSpent: result._sum.amount || 0,
+    totalSessions: result._count,
+  });
+});
+
+// ---------- STAFF ----------
+
+app.get('/api/staff/directory', authenticate, async (req, res) => {
+  const staff = await prisma.staff.findMany({
+    where: { isActive: true },
+    select: { id: true, fullName: true, position: true },
+  });
+  res.json(staff);
+});
+
 app.get('/api/staff', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
   const staff = await prisma.staff.findMany({
     include: { user: { select: { email: true } } },
@@ -247,6 +299,10 @@ app.delete('/api/staff/:id', authenticate, authorize('ADMIN'), async (req, res) 
   }
 });
 
+// ---------- APPOINTMENTS ----------
+// IMPORTANT: specific literal paths (/staff/my, /my) must come BEFORE
+// the wildcard path (/:id), or the wildcard swallows them.
+
 app.get('/api/appointments', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
   const appointments = await prisma.appointment.findMany({
     include: {
@@ -256,6 +312,73 @@ app.get('/api/appointments', authenticate, authorize('ADMIN', 'STAFF'), async (r
     },
   });
   res.json(appointments);
+});
+
+app.get('/api/appointments/staff/my', authenticate, authorize('STAFF'), async (req, res) => {
+  const staffMember = await prisma.staff.findUnique({
+    where: { userId: req.user.userId },
+  });
+
+  if (!staffMember) {
+    return res.status(404).json({ message: 'Staff profile not found for this user' });
+  }
+
+  const appointments = await prisma.appointment.findMany({
+    where: { staffId: staffMember.id },
+    include: {
+      client: { select: { fullName: true } },
+      service: { select: { name: true, price: true, duration: true } },
+    },
+  });
+
+  res.json(appointments);
+});
+
+app.get('/api/appointments/my', authenticate, authorize('CLIENT'), async (req, res) => {
+  const client = await prisma.client.findUnique({
+    where: { userId: req.user.userId },
+  });
+
+  if (!client) {
+    return res.status(404).json({ message: 'Client profile not found for this user' });
+  }
+
+  const appointments = await prisma.appointment.findMany({
+    where: { clientId: client.id },
+    include: {
+      staff: { select: { fullName: true } },
+      service: { select: { name: true, price: true, duration: true } },
+    },
+  });
+
+  res.json(appointments);
+});
+
+app.post('/api/appointments/my', authenticate, authorize('CLIENT'), async (req, res) => {
+  const { staffId, serviceId, dateTime } = req.body;
+
+  try {
+    const client = await prisma.client.findUnique({
+      where: { userId: req.user.userId },
+    });
+
+    if (!client) {
+      return res.status(404).json({ message: 'Client profile not found for this user' });
+    }
+
+    const newAppointment = await prisma.appointment.create({
+      data: {
+        clientId: client.id,
+        staffId,
+        serviceId,
+        dateTime: new Date(dateTime),
+      },
+    });
+
+    res.status(201).json(newAppointment);
+  } catch (error) {
+    res.status(400).json({ message: 'Could not create appointment', error: error.message });
+  }
 });
 
 app.get('/api/appointments/:id', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
@@ -354,88 +477,7 @@ app.post('/api/appointments/:id/pay', authenticate, authorize('ADMIN', 'STAFF'),
   }
 });
 
-app.post('/api/appointments/my', authenticate, authorize('CLIENT'), async (req, res) => {
-  const { staffId, serviceId, dateTime } = req.body;
-
-  try {
-    const client = await prisma.client.findUnique({
-      where: { userId: req.user.userId },
-    });
-
-    if (!client) {
-      return res.status(404).json({ message: 'Client profile not found for this user' });
-    }
-
-    const newAppointment = await prisma.appointment.create({
-      data: {
-        clientId: client.id,
-        staffId,
-        serviceId,
-        dateTime: new Date(dateTime),
-      },
-    });
-
-    res.status(201).json(newAppointment);
-  } catch (error) {
-    res.status(400).json({ message: 'Could not create appointment', error: error.message });
-  }
-});
-
-app.get('/api/appointments/my', authenticate, authorize('CLIENT'), async (req, res) => {
-  const client = await prisma.client.findUnique({
-    where: { userId: req.user.userId },
-  });
-
-  if (!client) {
-    return res.status(404).json({ message: 'Client profile not found for this user' });
-  }
-
-  const appointments = await prisma.appointment.findMany({
-    where: { clientId: client.id },
-    include: {
-      staff: { select: { fullName: true } },
-      service: { select: { name: true, price: true, duration: true } },
-    },
-  });
-
-  res.json(appointments);
-});
-
-app.get('/api/clients/me/spending', authenticate, authorize('CLIENT'), async (req, res) => {
-  const client = await prisma.client.findUnique({
-    where: { userId: req.user.userId },
-  });
-
-  if (!client) {
-    return res.status(404).json({ message: 'Client profile not found for this user' });
-  }
-
-  const result = await prisma.payment.aggregate({
-    where: { appointment: { clientId: client.id } },
-    _sum: { amount: true },
-    _count: true,
-  });
-
-  res.json({
-    totalSpent: result._sum.amount || 0,
-    totalSessions: result._count,
-  });
-});
-
-app.get('/api/clients/:id/spending', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
-  const clientId = Number(req.params.id);
-
-  const result = await prisma.payment.aggregate({
-    where: { appointment: { clientId } },
-    _sum: { amount: true },
-    _count: true,
-  });
-
-  res.json({
-    totalSpent: result._sum.amount || 0,
-    totalSessions: result._count,
-  });
-});
+// ---------- REPORTS ----------
 
 app.get('/api/reports/daily-revenue', authenticate, authorize('ADMIN'), async (req, res) => {
   const startOfDay = new Date();
@@ -456,6 +498,8 @@ app.get('/api/reports/daily-revenue', authenticate, authorize('ADMIN'), async (r
     totalPayments: result._count,
   });
 });
+
+// ---------- ATTENDANCE ----------
 
 app.post('/api/attendance/clock-in', authenticate, authorize('STAFF'), async (req, res) => {
   const staffMember = await prisma.staff.findUnique({
@@ -487,12 +531,31 @@ app.put('/api/attendance/:id/clock-out', authenticate, authorize('STAFF'), async
   }
 });
 
+app.get('/api/attendance/my', authenticate, authorize('STAFF'), async (req, res) => {
+  const staffMember = await prisma.staff.findUnique({
+    where: { userId: req.user.userId },
+  });
+
+  if (!staffMember) {
+    return res.status(404).json({ message: 'Staff profile not found for this user' });
+  }
+
+  const attendance = await prisma.attendance.findMany({
+    where: { staffId: staffMember.id },
+    orderBy: { clockIn: 'desc' },
+  });
+
+  res.json(attendance);
+});
+
 app.get('/api/attendance', authenticate, authorize('ADMIN'), async (req, res) => {
   const attendance = await prisma.attendance.findMany({
     include: { staff: { select: { fullName: true } } },
   });
   res.json(attendance);
 });
+
+// ---------- DASHBOARD ----------
 
 app.get('/api/dashboard', authenticate, authorize('ADMIN'), async (req, res) => {
   const startOfDay = new Date();

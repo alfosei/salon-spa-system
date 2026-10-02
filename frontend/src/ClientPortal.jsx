@@ -20,6 +20,7 @@ function ClientPortal() {
   useEffect(() => {
     loadData();
     apiRequest('/api/services').then(setServices).catch((err) => setError(err.message));
+    apiRequest('/api/staff/directory').then(setStaff).catch((err) => setError(err.message));
   }, []);
 
   async function handleBook(e) {
@@ -67,13 +68,14 @@ function ClientPortal() {
             <option key={s.id} value={s.id}>{s.name} — GH₵{s.price}</option>
           ))}
         </select>
-        <input
-          type="number"
-          placeholder="Staff ID"
-          value={staffId}
-          onChange={(e) => setStaffId(e.target.value)}
-          required
-        />
+
+        <select value={staffId} onChange={(e) => setStaffId(e.target.value)} required>
+          <option value="">Select a staff member</option>
+          {staff.map((s) => (
+            <option key={s.id} value={s.id}>{s.fullName} ({s.position})</option>
+          ))}
+        </select>
+
         <input
           type="datetime-local"
           value={dateTime}
