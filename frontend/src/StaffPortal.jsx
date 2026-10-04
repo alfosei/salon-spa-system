@@ -40,12 +40,23 @@ function StaffPortal() {
     }
   }
 
-  async function markCompleted(appointmentId) {
+  async function handleCompleteAndPay(appointment) {
+    const defaultAmount = appointment.service.price;
+    const input = window.prompt(`Amount paid for ${appointment.service.name}?`, defaultAmount);
+
+    if (input === null) return;
+
+    const amount = Number(input);
+    if (Number.isNaN(amount)) {
+      setError('Enter a valid number for the payment amount.');
+      return;
+    }
+
     setError('');
     try {
-      await apiRequest(`/api/appointments/${appointmentId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ status: 'COMPLETED' }),
+      await apiRequest(`/api/appointments/${appointment.id}/pay`, {
+        method: 'POST',
+        body: JSON.stringify({ amount }),
       });
       loadData();
     } catch (err) {
@@ -58,8 +69,8 @@ function StaffPortal() {
   return (
     <div>
       <h2>My Dashboard</h2>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      {message && <p style={{ color: 'green' }}>{message}</p>}
+      {error && <p className="error-text">{error}</p>}
+      {message && <p className="success-text">{message}</p>}
 
       <div>
         {openAttendance ? (
@@ -75,7 +86,7 @@ function StaffPortal() {
           <li key={a.id}>
             {new Date(a.dateTime).toLocaleString()} — {a.client.fullName} — {a.service.name} — {a.status}
             {a.status !== 'COMPLETED' && a.status !== 'CANCELLED' && (
-              <> <button onClick={() => markCompleted(a.id)}>Mark Completed</button></>
+              <> <button onClick={() => handleCompleteAndPay(a)}>Complete &amp; Collect Payment</button></>
             )}
           </li>
         ))}
@@ -85,7 +96,8 @@ function StaffPortal() {
       <ul>
         {attendance.map((a) => (
           <li key={a.id}>
-            In: {new Date(a.clockIn).toLocaleString()} — Out: {a.clockOut ? new Date(a.clockOut).toLocaleString() : 'still clocked in'}
+            In: {new Date(a.clockIn).toLocaleString()} — Out:{' '}
+            {a.clockOut ? new Date(a.clockOut).toLocaleString() : 'still clocked in'}
           </li>
         ))}
       </ul>

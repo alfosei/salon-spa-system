@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const { authenticate, authorize } = require('./middleware/auth');
 const cors = require('cors');
 const Anthropic = require('@anthropic-ai/sdk');
+const { z } = require('zod');
 
 const app = express();
 const PORT = 3000;
@@ -16,6 +17,20 @@ const anthropic = process.env.ANTHROPIC_API_KEY
 
 app.use(express.json());
 app.use(cors());
+
+// Logs the real error on the server (only you see this), and sends
+// the client a short, safe message instead of internal error details.
+function handleServerError(res, status, clientMessage, error) {
+  console.error(clientMessage, '-', error.message);
+  return res.status(status).json({ message: clientMessage });
+}
+
+const registerSchema = z.object({
+  email: z.string().email('Enter a valid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  fullName: z.string().min(1, 'Full name is required'),
+  phone: z.string().optional(),
+});
 
 app.post('/api/auth/register', async (req, res) => {
   const { email, password, role } = req.body;
@@ -37,7 +52,7 @@ app.post('/api/auth/register', async (req, res) => {
       role: newUser.role,
     });
   } catch (error) {
-    res.status(400).json({ message: 'Could not create user', error: error.message });
+    return handleServerError(res, 400, 'Could not create user', error);
   }
 });
 
@@ -65,6 +80,40 @@ app.post('/api/auth/login', async (req, res) => {
   res.json({ token });
 });
 
+app.post('/api/auth/signup', async (req, res) => {
+  const parsed = registerSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({
+      message: parsed.error.issues[0].message,
+    });
+  }
+
+  const { email, password, fullName, phone } = parsed.data;
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = await prisma.user.create({
+      data: { email, password: hashedPassword, role: 'CLIENT' },
+    });
+
+    await prisma.client.create({
+      data: { userId: newUser.id, fullName, phone },
+    });
+
+    const token = jwt.sign(
+      { userId: newUser.id, role: newUser.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '1d' }
+    );
+
+    res.status(201).json({ token });
+  } catch (error) {
+    return handleServerError(res, 400, 'Could not create account', error);
+  }
+});
+
 app.get('/', (req, res) => {
   res.send('Salon & Spa backend is running');
 });
@@ -89,7 +138,7 @@ app.put('/api/users/me/email', authenticate, async (req, res) => {
 
     res.json({ id: updatedUser.id, email: updatedUser.email, role: updatedUser.role });
   } catch (error) {
-    res.status(400).json({ message: 'Could not update email', error: error.message });
+    return handleServerError(res, 400, 'Could not update email', error);
   }
 });
 
@@ -113,7 +162,7 @@ app.put('/api/users/me/password', authenticate, async (req, res) => {
 
     res.json({ message: 'Password updated' });
   } catch (error) {
-    res.status(400).json({ message: 'Could not update password', error: error.message });
+    return handleServerError(res, 400, 'Could not update password', error);
   }
 });
 
@@ -211,7 +260,7 @@ app.put('/api/clients/me', authenticate, authorize('CLIENT'), async (req, res) =
 
     res.json(updatedClient);
   } catch (error) {
-    res.status(400).json({ message: 'Could not update profile', error: error.message });
+    return handleServerError(res, 400, 'Could not update profile', error);
   }
 });
 
@@ -266,7 +315,7 @@ app.post('/api/clients', authenticate, authorize('ADMIN'), async (req, res) => {
     });
     res.status(201).json(newClient);
   } catch (error) {
-    res.status(400).json({ message: 'Could not create client', error: error.message });
+    return handleServerError(res, 400, 'Could not create client', error);
   }
 });
 
@@ -314,7 +363,6 @@ app.get('/api/clients/:id/spending', authenticate, authorize('ADMIN', 'STAFF'), 
 });
 
 // ---------- STAFF ----------
-// Same rule: literal paths (/directory, /me) before the wildcard (/:id).
 
 app.get('/api/staff/directory', authenticate, async (req, res) => {
   const staff = await prisma.staff.findMany({
@@ -354,7 +402,7 @@ app.put('/api/staff/me', authenticate, authorize('STAFF'), async (req, res) => {
 
     res.json(updated);
   } catch (error) {
-    res.status(400).json({ message: 'Could not update profile', error: error.message });
+    return handleServerError(res, 400, 'Could not update profile', error);
   }
 });
 
@@ -388,7 +436,7 @@ app.post('/api/staff', authenticate, authorize('ADMIN'), async (req, res) => {
     });
     res.status(201).json(newStaff);
   } catch (error) {
-    res.status(400).json({ message: 'Could not create staff member', error: error.message });
+    return handleServerError(res, 400, 'Could not create staff member', error);
   }
 });
 
@@ -496,7 +544,7 @@ app.post('/api/appointments/my', authenticate, authorize('CLIENT'), async (req, 
 
     res.status(201).json(newAppointment);
   } catch (error) {
-    res.status(400).json({ message: 'Could not create appointment', error: error.message });
+    return handleServerError(res, 400, 'Could not create appointment', error);
   }
 });
 
@@ -532,7 +580,7 @@ app.post('/api/appointments', authenticate, authorize('ADMIN', 'STAFF'), async (
     });
     res.status(201).json(newAppointment);
   } catch (error) {
-    res.status(400).json({ message: 'Could not create appointment', error: error.message });
+    return handleServerError(res, 400, 'Could not create appointment', error);
   }
 });
 
@@ -592,7 +640,7 @@ app.post('/api/appointments/:id/pay', authenticate, authorize('ADMIN', 'STAFF'),
 
     res.status(201).json({ appointment: updatedAppointment, payment });
   } catch (error) {
-    res.status(400).json({ message: 'Could not process payment', error: error.message });
+    return handleServerError(res, 400, 'Could not process payment', error);
   }
 });
 
@@ -716,7 +764,7 @@ Rules:
 
     res.json({ reply: aiResponse.content[0].text });
   } catch (error) {
-    res.status(500).json({ message: 'Advisor request failed', error: error.message });
+    return handleServerError(res, 500, 'Advisor request failed', error);
   }
 });
 
