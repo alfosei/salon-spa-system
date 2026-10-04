@@ -7,6 +7,7 @@ const { authenticate, authorize } = require('./middleware/auth');
 const cors = require('cors');
 const Anthropic = require('@anthropic-ai/sdk');
 const { z } = require('zod');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = 3000;
@@ -32,7 +33,15 @@ const registerSchema = z.object({
   phone: z.string().optional(),
 });
 
-app.post('/api/auth/register', async (req, res) => {
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 attempts per IP per window
+  message: { message: 'Too many attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   const { email, password, role } = req.body;
 
   try {
@@ -56,7 +65,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   const user = await prisma.user.findUnique({ where: { email } });
@@ -80,7 +89,7 @@ app.post('/api/auth/login', async (req, res) => {
   res.json({ token });
 });
 
-app.post('/api/auth/signup', async (req, res) => {
+app.post('/api/auth/signup', authLimiter, async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
 
   if (!parsed.success) {
