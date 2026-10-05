@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { apiRequest } from './api';
+import AttendanceList from './AttendanceList';
+import AppointmentGroup from './AppointmentGroup';
 
 function StaffPortal() {
   const [appointments, setAppointments] = useState([]);
@@ -65,43 +67,42 @@ function StaffPortal() {
   }
 
   const openAttendance = attendance.find((a) => !a.clockOut);
+  const upcoming = appointments.filter((a) => a.status !== 'COMPLETED' && a.status !== 'CANCELLED');
+  const completed = appointments.filter((a) => a.status === 'COMPLETED');
+  const cancelled = appointments.filter((a) => a.status === 'CANCELLED');
 
   return (
-    <div>
-      <h2>My Dashboard</h2>
+    <>
       {error && <p className="error-text">{error}</p>}
       {message && <p className="success-text">{message}</p>}
 
-      <div>
-        {openAttendance ? (
-          <button onClick={() => handleClockOut(openAttendance.id)}>Clock Out</button>
-        ) : (
-          <button onClick={handleClockIn}>Clock In</button>
-        )}
+      <div className="panel-grid">
+        <div className="panel panel-compact">
+          <h2>Shift</h2>
+          <p className="muted-text">
+            {openAttendance ? 'You are currently clocked in.' : 'You are not clocked in.'}
+          </p>
+          {openAttendance ? (
+            <button onClick={() => handleClockOut(openAttendance.id)}>Clock Out</button>
+          ) : (
+            <button onClick={handleClockIn}>Clock In</button>
+          )}
+        </div>
+
+        <div className="panel">
+          <h2>My Appointments</h2>
+          <AppointmentGroup title="Upcoming" appointments={upcoming} onComplete={handleCompleteAndPay} showClient />
+          <AppointmentGroup title="Completed" appointments={completed} showClient />
+          <AppointmentGroup title="Cancelled" appointments={cancelled} showClient />
+          {appointments.length === 0 && <p className="muted-text">No appointments yet.</p>}
+        </div>
+
+        <div className="panel">
+          <h2>My Attendance</h2>
+          <AttendanceList records={attendance} />
+        </div>
       </div>
-
-      <h3>My Appointments</h3>
-      <ul>
-        {appointments.map((a) => (
-          <li key={a.id}>
-            {new Date(a.dateTime).toLocaleString()} — {a.client.fullName} — {a.service.name} — {a.status}
-            {a.status !== 'COMPLETED' && a.status !== 'CANCELLED' && (
-              <> <button onClick={() => handleCompleteAndPay(a)}>Complete &amp; Collect Payment</button></>
-            )}
-          </li>
-        ))}
-      </ul>
-
-      <h3>My Attendance</h3>
-      <ul>
-        {attendance.map((a) => (
-          <li key={a.id}>
-            In: {new Date(a.clockIn).toLocaleString()} — Out:{' '}
-            {a.clockOut ? new Date(a.clockOut).toLocaleString() : 'still clocked in'}
-          </li>
-        ))}
-      </ul>
-    </div>
+    </>
   );
 }
 

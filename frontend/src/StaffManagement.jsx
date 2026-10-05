@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiRequest } from './api';
+import AttendanceList from './AttendanceList';
 
 function StaffManagement() {
   const [staff, setStaff] = useState([]);
@@ -143,14 +144,7 @@ function StaffManagement() {
       {Object.values(attendanceByStaff).map((group) => (
         <div key={group.fullName}>
           <h4>{group.fullName}</h4>
-          <ul>
-            {group.records.map((a) => (
-              <li key={a.id}>
-                In: {new Date(a.clockIn).toLocaleString()} — Out:{' '}
-                {a.clockOut ? new Date(a.clockOut).toLocaleString() : 'still clocked in'}
-              </li>
-            ))}
-          </ul>
+          <AttendanceList records={group.records} />
         </div>
       ))}
     </div>

@@ -8,6 +8,7 @@ import StaffManagement from './StaffManagement';
 import ClientPortal from './ClientPortal';
 import StaffPortal from './StaffPortal';
 import Settings from './Settings';
+import Greeting from './Greeting';
 import { getUserRole } from './api';
 
 function formatRole(role) {
@@ -54,6 +55,8 @@ function App() {
       </div>
 
       <div className="app-content">
+        <Greeting />
+
         {showSettings ? (
           <div className="narrow-content">
             <Settings />
@@ -61,12 +64,12 @@ function App() {
         ) : (
           <>
             {role === 'CLIENT' && (
-              <div className="narrow-content">
+              <div className="portal-content">
                 <ClientPortal />
               </div>
             )}
             {role === 'STAFF' && (
-              <div className="narrow-content">
+              <div className="portal-content">
                 <StaffPortal />
               </div>
             )}

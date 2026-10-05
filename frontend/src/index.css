@@ -56,6 +56,12 @@ a {
 .error-text { color: var(--color-error); }
 .success-text { color: var(--color-success); }
 .muted-text { color: var(--color-text-muted); }
+.accent-text { color: var(--color-accent); }
+
+.greeting {
+  margin-top: 0;
+  font-size: 1.6rem;
+}
 
 /* ---------- Header & brand ---------- */
 
@@ -180,6 +186,111 @@ a {
 .panel::-webkit-scrollbar-track { background: transparent; }
 .panel::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
 .panel::-webkit-scrollbar-thumb:hover { background: var(--color-accent); }
+
+.panel-compact {
+  max-height: none;
+  overflow: visible;
+}
+
+.panel-grid {
+  column-count: 2;
+  column-gap: 1.25rem;
+}
+
+.panel-grid .panel {
+  break-inside: avoid;
+  margin-bottom: 1.25rem;
+  width: 100%;
+}
+
+@media (max-width: 700px) {
+  .panel-grid {
+    column-count: 1;
+  }
+}
+
+.portal-content {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.appointment-group:not(:first-child) {
+  margin-top: 1.25rem;
+}
+
+.appointment-group h3 {
+  margin-top: 0;
+}
+
+.appointment-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.appointment-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.appointment-service {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.appointment-with,
+.appointment-time {
+  font-size: 0.85rem;
+}
+
+.appointment-card-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.appointment-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.status-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+.status-pending {
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+}
+
+.status-confirmed {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.status-completed {
+  color: var(--color-success);
+  border-color: var(--color-success);
+  background: rgba(156, 179, 138, 0.1);
+}
+
+.status-cancelled {
+  color: var(--color-error);
+  border-color: var(--color-error);
+  background: rgba(224, 138, 120, 0.1);
+}
 
 /* ---------- Stat cards ---------- */
 

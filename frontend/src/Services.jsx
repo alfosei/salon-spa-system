@@ -85,19 +85,26 @@ function Services() {
   return (
     <div>
       <h2>Services</h2>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {error && <p className="error-text">{error}</p>}
 
-      <ul>
+      <ul className="appointment-list">
         {services.map((service) => (
-          <li key={service.id}>
-            {service.name} — GH₵{service.price} ({service.duration} min)
-            {isAdmin && (
-              <>
-                {' '}
-                <button onClick={() => startEdit(service)}>Edit</button>
-                <button onClick={() => handleDelete(service.id)}>Delete</button>
-              </>
-            )}
+          <li key={service.id} className="appointment-card">
+            <div className="appointment-card-main">
+              <div className="appointment-service">{service.name}</div>
+              <div className="appointment-with muted-text">
+                {service.category} · {service.duration} min
+              </div>
+            </div>
+            <div className="appointment-card-side">
+              <span className="status-badge status-confirmed">GH₵{service.price}</span>
+              {isAdmin && (
+                <div className="appointment-actions">
+                  <button onClick={() => startEdit(service)}>Edit</button>
+                  <button type="button" onClick={() => handleDelete(service.id)}>Delete</button>
+                </div>
+              )}
+            </div>
           </li>
         ))}
       </ul>

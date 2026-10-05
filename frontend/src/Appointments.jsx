@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { apiRequest } from './api';
 import BookingForm from './BookingForm';
+import AppointmentGroup from './AppointmentGroup';
 
 function Appointments() {
   const [appointments, setAppointments] = useState([]);
@@ -56,30 +57,19 @@ function Appointments() {
     }
   }
 
+  const upcoming = appointments.filter((a) => a.status !== 'COMPLETED' && a.status !== 'CANCELLED');
+  const completed = appointments.filter((a) => a.status === 'COMPLETED');
+  const cancelled = appointments.filter((a) => a.status === 'CANCELLED');
+
   return (
     <div>
       <BookingForm onBookingCreated={loadAppointments} />
       <h2>Appointments</h2>
       {error && <p className="error-text">{error}</p>}
-      <ul>
-        {appointments.map((a) => (
-          <li key={a.id}>
-            {new Date(a.dateTime).toLocaleString()} — {a.client.fullName} with{' '}
-            {a.staff.fullName} for {a.service.name} — {a.status}
-            {a.status !== 'COMPLETED' && a.status !== 'CANCELLED' && (
-              <>
-                {' '}
-                <button onClick={() => handleCompleteAndPay(a)}>
-                  Complete &amp; Collect Payment
-                </button>
-                <button type="button" onClick={() => handleCancel(a)}>
-                  Cancel
-                </button>
-              </>
-            )}
-          </li>
-        ))}
-      </ul>
+      <AppointmentGroup title="Upcoming" appointments={upcoming} onComplete={handleCompleteAndPay} onCancel={handleCancel} showBoth />
+      <AppointmentGroup title="Completed" appointments={completed} showBoth />
+      <AppointmentGroup title="Cancelled" appointments={cancelled} showBoth />
+      {appointments.length === 0 && <p className="muted-text">No appointments yet.</p>}
     </div>
   );
 }

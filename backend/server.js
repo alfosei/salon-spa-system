@@ -8,6 +8,8 @@ const cors = require('cors');
 const Anthropic = require('@anthropic-ai/sdk');
 const { z } = require('zod');
 const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = 3000;
@@ -16,7 +18,10 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null;
 
-app.use(express.json());
+app.use(helmet());
+app.use(express.json({
+  verify: (req, res, buf) => { req.rawBody = buf; },
+}));
 app.use(cors());
 
 // Logs the real error on the server (only you see this), and sends
@@ -40,6 +45,29 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// Checks whether a staff member is free for a given time window.
+// Two time ranges overlap when startA < endB AND startB < endA.
+// excludeAppointmentId lets a reschedule check availability without
+// colliding with the appointment's own current booking.
+async function isStaffAvailable(staffId, requestedStart, durationMinutes, excludeAppointmentId = null) {
+  const requestedEnd = new Date(requestedStart.getTime() + durationMinutes * 60000);
+
+  const existingAppointments = await prisma.appointment.findMany({
+    where: {
+      staffId,
+      status: { not: 'CANCELLED' },
+      ...(excludeAppointmentId ? { id: { not: excludeAppointmentId } } : {}),
+    },
+    include: { service: true },
+  });
+
+  return !existingAppointments.some((existing) => {
+    const existingStart = new Date(existing.dateTime);
+    const existingEnd = new Date(existingStart.getTime() + existing.service.duration * 60000);
+    return requestedStart < existingEnd && existingStart < requestedEnd;
+  });
+}
 
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   const { email, password, role } = req.body;
@@ -128,6 +156,19 @@ app.get('/', (req, res) => {
 });
 
 // ---------- ACCOUNT (self-service, any logged-in role) ----------
+
+app.get('/api/users/me', authenticate, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.userId },
+    select: { id: true, email: true, role: true },
+  });
+
+  if (!user) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+
+  res.json(user);
+});
 
 app.put('/api/users/me/email', authenticate, async (req, res) => {
   const { newEmail, currentPassword } = req.body;
@@ -236,8 +277,8 @@ app.delete('/api/services/:id', authenticate, authorize('ADMIN'), async (req, re
 });
 
 // ---------- CLIENTS ----------
-// IMPORTANT: literal paths (/me, /me/spending) must come BEFORE
-// wildcard paths (/:id, /:id/spending), or the wildcard swallows them.
+// IMPORTANT: literal paths (/me, /me/spending, /me/payments) must come
+// BEFORE wildcard paths (/:id, /:id/spending), or the wildcard swallows them.
 
 app.get('/api/clients/me', authenticate, authorize('CLIENT'), async (req, res) => {
   const client = await prisma.client.findUnique({
@@ -292,6 +333,29 @@ app.get('/api/clients/me/spending', authenticate, authorize('CLIENT'), async (re
     totalSpent: result._sum.amount || 0,
     totalSessions: result._count,
   });
+});
+
+app.get('/api/clients/me/payments', authenticate, authorize('CLIENT'), async (req, res) => {
+  const client = await prisma.client.findUnique({ where: { userId: req.user.userId } });
+
+  if (!client) {
+    return res.status(404).json({ message: 'Client profile not found for this user' });
+  }
+
+  const payments = await prisma.payment.findMany({
+    where: { appointment: { clientId: client.id } },
+    include: {
+      appointment: {
+        include: {
+          service: { select: { name: true } },
+          staff: { select: { fullName: true } },
+        },
+      },
+    },
+    orderBy: { paidAt: 'desc' },
+  });
+
+  res.json(payments);
 });
 
 app.get('/api/clients', authenticate, authorize('ADMIN', 'STAFF'), async (req, res) => {
@@ -542,6 +606,20 @@ app.post('/api/appointments/my', authenticate, authorize('CLIENT'), async (req, 
       return res.status(404).json({ message: 'Client profile not found for this user' });
     }
 
+    const service = await prisma.service.findUnique({ where: { id: serviceId } });
+
+    if (!service) {
+      return res.status(404).json({ message: 'Service not found' });
+    }
+
+    const available = await isStaffAvailable(staffId, new Date(dateTime), service.duration);
+
+    if (!available) {
+      return res.status(409).json({
+        message: 'This staff member is already booked at that time. Please choose another time or staff member.',
+      });
+    }
+
     const newAppointment = await prisma.appointment.create({
       data: {
         clientId: client.id,
@@ -554,6 +632,38 @@ app.post('/api/appointments/my', authenticate, authorize('CLIENT'), async (req, 
     res.status(201).json(newAppointment);
   } catch (error) {
     return handleServerError(res, 400, 'Could not create appointment', error);
+  }
+});
+
+app.put('/api/appointments/my/:id/cancel', authenticate, authorize('CLIENT'), async (req, res) => {
+  const appointmentId = Number(req.params.id);
+
+  try {
+    const client = await prisma.client.findUnique({ where: { userId: req.user.userId } });
+
+    if (!client) {
+      return res.status(404).json({ message: 'Client profile not found for this user' });
+    }
+
+    const appointment = await prisma.appointment.findUnique({ where: { id: appointmentId } });
+
+    // Ownership check: a client may only ever cancel their own appointment.
+    if (!appointment || appointment.clientId !== client.id) {
+      return res.status(404).json({ message: 'Appointment not found' });
+    }
+
+    if (appointment.status === 'COMPLETED' || appointment.status === 'CANCELLED') {
+      return res.status(400).json({ message: 'This appointment can no longer be cancelled' });
+    }
+
+    const updated = await prisma.appointment.update({
+      where: { id: appointmentId },
+      data: { status: 'CANCELLED' },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    return handleServerError(res, 400, 'Could not cancel appointment', error);
   }
 });
 
@@ -579,6 +689,18 @@ app.post('/api/appointments', authenticate, authorize('ADMIN', 'STAFF'), async (
   const { clientId, staffId, serviceId, dateTime } = req.body;
 
   try {
+    const service = await prisma.service.findUnique({ where: { id: serviceId } });
+
+    if (!service) {
+      return res.status(404).json({ message: 'Service not found' });
+    }
+
+    const available = await isStaffAvailable(staffId, new Date(dateTime), service.duration);
+
+    if (!available) {
+      return res.status(409).json({ message: 'This staff member is already booked at that time' });
+    }
+
     const newAppointment = await prisma.appointment.create({
       data: {
         clientId,
@@ -598,6 +720,33 @@ app.put('/api/appointments/:id', authenticate, authorize('ADMIN', 'STAFF'), asyn
   const { staffId, dateTime, status } = req.body;
 
   try {
+    const existing = await prisma.appointment.findUnique({
+      where: { id: requestedId },
+      include: { service: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ message: 'Appointment not found' });
+    }
+
+    // Only re-check availability if staff or time is actually changing —
+    // a plain status update (e.g. cancelling) shouldn't trigger this.
+    if (staffId || dateTime) {
+      const effectiveStaffId = staffId || existing.staffId;
+      const effectiveDateTime = dateTime ? new Date(dateTime) : existing.dateTime;
+
+      const available = await isStaffAvailable(
+        effectiveStaffId,
+        effectiveDateTime,
+        existing.service.duration,
+        existing.id
+      );
+
+      if (!available) {
+        return res.status(409).json({ message: 'This staff member is already booked at that time' });
+      }
+    }
+
     const updatedAppointment = await prisma.appointment.update({
       where: { id: requestedId },
       data: {
@@ -672,6 +821,47 @@ app.get('/api/reports/daily-revenue', authenticate, authorize('ADMIN'), async (r
     date: startOfDay.toISOString().split('T')[0],
     totalRevenue: result._sum.amount || 0,
     totalPayments: result._count,
+  });
+});
+
+app.get('/api/reports/monthly', authenticate, authorize('ADMIN'), async (req, res) => {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  const [revenueResult, completedCount, newClientsCount, popularRaw] = await Promise.all([
+    prisma.payment.aggregate({
+      where: { paidAt: { gte: startOfMonth, lte: endOfMonth } },
+      _sum: { amount: true },
+    }),
+    prisma.appointment.count({
+      where: { status: 'COMPLETED', dateTime: { gte: startOfMonth, lte: endOfMonth } },
+    }),
+    prisma.client.count({
+      where: { createdAt: { gte: startOfMonth, lte: endOfMonth } },
+    }),
+    prisma.appointment.groupBy({
+      by: ['serviceId'],
+      where: { dateTime: { gte: startOfMonth, lte: endOfMonth } },
+      _count: { serviceId: true },
+      orderBy: { _count: { serviceId: 'desc' } },
+      take: 3,
+    }),
+  ]);
+
+  const popularServices = await Promise.all(
+    popularRaw.map(async (row) => {
+      const service = await prisma.service.findUnique({ where: { id: row.serviceId } });
+      return { name: service ? service.name : 'Unknown', count: row._count.serviceId };
+    })
+  );
+
+  res.json({
+    month: startOfMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    monthlyRevenue: revenueResult._sum.amount || 0,
+    completedThisMonth: completedCount,
+    newClientsThisMonth: newClientsCount,
+    popularServices,
   });
 });
 
@@ -775,6 +965,148 @@ Rules:
   } catch (error) {
     return handleServerError(res, 500, 'Advisor request failed', error);
   }
+});
+
+// ---------- PAYMENTS (Paystack) ----------
+
+async function confirmPaystackPayment(paystackData) {
+  if (paystackData.status !== 'success') {
+    return { ok: false, reason: 'Payment was not successful' };
+  }
+
+  const appointmentId = Number(paystackData.metadata?.appointmentId);
+
+  if (!appointmentId) {
+    return { ok: false, reason: 'No appointment linked to this payment' };
+  }
+
+  const existingPayment = await prisma.payment.findUnique({ where: { appointmentId } });
+
+  if (existingPayment) {
+    return { ok: true, alreadyProcessed: true };
+  }
+
+  await prisma.appointment.update({
+    where: { id: appointmentId },
+    data: { status: 'COMPLETED' },
+  });
+
+  await prisma.payment.create({
+    data: {
+      appointmentId,
+      amount: paystackData.amount / 100,
+    },
+  });
+
+  return { ok: true, alreadyProcessed: false };
+}
+
+app.post('/api/appointments/:id/initiate-payment', authenticate, authorize('CLIENT'), async (req, res) => {
+  const appointmentId = Number(req.params.id);
+
+  try {
+    const client = await prisma.client.findUnique({
+      where: { userId: req.user.userId },
+      include: { user: { select: { email: true } } },
+    });
+
+    if (!client) {
+      return res.status(404).json({ message: 'Client profile not found for this user' });
+    }
+
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      include: { service: true },
+    });
+
+    if (!appointment || appointment.clientId !== client.id) {
+      return res.status(404).json({ message: 'Appointment not found' });
+    }
+
+    if (appointment.status === 'COMPLETED' || appointment.status === 'CANCELLED') {
+      return res.status(400).json({ message: 'This appointment cannot be paid for' });
+    }
+
+    const reference = `ozel_${appointment.id}_${Date.now()}`;
+    const amountInPesewas = Math.round(appointment.service.price * 100);
+
+    const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: client.user.email,
+        amount: amountInPesewas,
+        reference,
+        callback_url: process.env.FRONTEND_URL,
+        channels: ['card', 'mobile_money', 'bank_transfer'],
+        metadata: { appointmentId: appointment.id },
+      }),
+    });
+
+    const paystackData = await paystackResponse.json();
+
+    if (!paystackData.status) {
+      return handleServerError(res, 400, 'Could not start payment', new Error(paystackData.message));
+    }
+
+    res.json({
+      authorizationUrl: paystackData.data.authorization_url,
+      reference: paystackData.data.reference,
+    });
+  } catch (error) {
+    return handleServerError(res, 500, 'Could not start payment', error);
+  }
+});
+
+app.get('/api/payments/verify/:reference', authenticate, async (req, res) => {
+  const { reference } = req.params;
+
+  try {
+    const paystackResponse = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+      headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
+    });
+
+    const result = await paystackResponse.json();
+
+    if (!result.status) {
+      return res.status(400).json({ message: 'Could not verify payment' });
+    }
+
+    const confirmation = await confirmPaystackPayment(result.data);
+
+    if (!confirmation.ok) {
+      return res.status(400).json({ message: confirmation.reason });
+    }
+
+    res.json({ message: 'Payment confirmed' });
+  } catch (error) {
+    return handleServerError(res, 500, 'Could not verify payment', error);
+  }
+});
+
+app.post('/api/payments/webhook', async (req, res) => {
+  const signature = req.headers['x-paystack-signature'];
+  const expectedSignature = crypto
+    .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
+    .update(req.rawBody)
+    .digest('hex');
+
+  if (signature !== expectedSignature) {
+    return res.sendStatus(401);
+  }
+
+  if (req.body.event === 'charge.success') {
+    try {
+      await confirmPaystackPayment(req.body.data);
+    } catch (error) {
+      console.error('Webhook processing error -', error.message);
+    }
+  }
+
+  res.sendStatus(200);
 });
 
 // ---------- DASHBOARD ----------

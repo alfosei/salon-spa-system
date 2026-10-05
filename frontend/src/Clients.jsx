@@ -29,18 +29,31 @@ function Clients() {
       .catch((err) => setError(err.message));
   }, []);
 
-  if (error) return <p style={{ color: 'red' }}>{error}</p>;
+  if (error) return <p className="error-text">{error}</p>;
 
   return (
     <div>
       <h2>Clients</h2>
-      <ul>
+      <ul className="appointment-list">
         {clients.map((client) => (
-          <li key={client.id}>
-            {client.fullName} ({client.user.email}) — {client.phone || 'no phone'}
-            {spendingMap[client.id] && (
-              <> — {spendingMap[client.id].totalSessions} sessions, GH₵{spendingMap[client.id].totalSpent} total</>
-            )}
+          <li key={client.id} className="appointment-card">
+            <div className="appointment-card-main">
+              <div className="appointment-service">{client.fullName}</div>
+              <div className="appointment-with muted-text">{client.user.email}</div>
+              <div className="appointment-time muted-text">{client.phone || 'No phone on file'}</div>
+            </div>
+            <div className="appointment-card-side">
+              {spendingMap[client.id] && (
+                <>
+                  <span className="status-badge status-completed">
+                    GH₵{spendingMap[client.id].totalSpent}
+                  </span>
+                  <span className="muted-text" style={{ fontSize: '0.8rem' }}>
+                    {spendingMap[client.id].totalSessions} sessions
+                  </span>
+                </>
+              )}
+            </div>
           </li>
         ))}
       </ul>
